@@ -65,7 +65,7 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
         """
         # invoke model
         return self._generate(model, credentials, prompt_messages, model_parameters, tools, stop, stream, user)
-    
+
     def get_num_tokens(self, model: str, credentials: dict, prompt_messages: list[PromptMessage],
                        tools: Optional[list[PromptMessageTool]] = None) -> int:
         """
@@ -80,7 +80,7 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
         prompt = self._convert_messages_to_prompt(prompt_messages)
 
         return self._get_num_tokens_by_gpt2(prompt)
-    
+
     def _convert_messages_to_prompt(self, messages: list[PromptMessage]) -> str:
         """
         Format a list of messages into a full prompt for the Google model
@@ -96,7 +96,7 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
         )
 
         return text.rstrip()
-    
+
     def _convert_tools_to_glm_tool(self, tools: list[PromptMessageTool]) -> glm.Tool:
         """
         Convert tool messages to glm tools
@@ -131,18 +131,18 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
         :param credentials: model credentials
         :return:
         """
-        
+
         try:
             ping_message = SystemPromptMessage(content="ping")
             self._generate(model, credentials, [ping_message], {"max_tokens_to_sample": 5})
-            
+
         except Exception as ex:
             raise CredentialsValidateFailedError(str(ex))
-            
+
 
     def _generate(self, model: str, credentials: dict,
                   prompt_messages: list[PromptMessage], model_parameters: dict,
-                  tools: Optional[list[PromptMessageTool]] = None, stop: Optional[list[str]] = None, 
+                  tools: Optional[list[PromptMessageTool]] = None, stop: Optional[list[str]] = None,
                   stream: bool = True, user: Optional[str] = None
         ) -> Union[LLMResult, Generator]:
         """
@@ -159,6 +159,7 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
         """
         config_kwargs = model_parameters.copy()
         config_kwargs['max_output_tokens'] = config_kwargs.pop('max_tokens_to_sample', None)
+        config_kwargs['response_mime_type'] = config_kwargs.pop('response_format', 'text/plain')
 
         if stop:
             config_kwargs["stop_sequences"] = stop
@@ -191,10 +192,10 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
                         history.append(content)
 
         safety_settings={
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
         }
 
         google_model = glm.GenerativeModel(
@@ -279,7 +280,7 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
                             function=AssistantPromptMessage.ToolCall.ToolCallFunction(
                                 name=part.function_call.name,
                                 arguments=json.dumps({
-                                    key: value 
+                                    key: value
                                     for key, value in part.function_call.args.items()
                                 })
                             )
@@ -287,8 +288,8 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
                     ]
 
                 index += 1
-    
-                if not hasattr(chunk, 'finish_reason') or not chunk.finish_reason:                    
+
+                if not hasattr(chunk, 'finish_reason') or not chunk.finish_reason:
                     # transform assistant message to prompt message
                     yield LLMResultChunk(
                         model=model,
@@ -299,14 +300,14 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
                         )
                     )
                 else:
-                    
+
                     # calculate num tokens
                     prompt_tokens = self.get_num_tokens(model, credentials, prompt_messages)
                     completion_tokens = self.get_num_tokens(model, credentials, [assistant_prompt_message])
 
                     # transform usage
                     usage = self._calc_response_usage(model, credentials, prompt_tokens, completion_tokens)
-                    
+
                     yield LLMResultChunk(
                         model=model,
                         prompt_messages=prompt_messages,
@@ -369,7 +370,7 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
                         mime_type = metadata.split(';', 1)[0].split(':')[1]
                         blob = {"inline_data":{"mime_type":mime_type,"data":data}}
                         parts.append(blob)
-                
+
                 glm_content = glm.Content(role="user", parts=[parts])
             return glm_content
         elif isinstance(message, AssistantPromptMessage):
@@ -391,7 +392,7 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
             return glm_content
         else:
             raise ValueError(f"Got unknown type {message}")
-    
+
     @property
     def _invoke_error_mapping(self) -> dict[type[InvokeError], list[type[Exception]]]:
         """
